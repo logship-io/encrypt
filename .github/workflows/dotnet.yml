@@ -30,7 +30,7 @@ jobs:
     - name: Build
       run: dotnet build --no-restore ./src/encrypt
     - name: Test
-      run: dotnet publish -R ${{ matrix.rid }} -p Release --self-contained ./src/encrypt
+      run: dotnet publish -r ${{ matrix.rid }} --self-contained ./src/encrypt
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4
       with:
