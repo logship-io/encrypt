@@ -1,0 +1,66 @@
+# Build artifacts
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# Visual Studio Code settings
+.vscode/
+
+# Rider settings
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.pdb
+
+# Package directories
+packages/
+node_modules/
+
+# Dependency files
+*.dll
+*.exe
+*.so
+*.dylib
+
+# Generated files
+*.g.cs
+*.g.i.cs
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# NuGet packages
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+
+# Resharper files
+_ReSharper*/
+*.DotSettings.user
+
+# Azure DevOps
+*.coverage
+*.coveragexml
+*.testsettings
+*.vsmdi
+
+# Other
+*.swp
+*.bak
+*.orig
+*.rej
+
+.vs
