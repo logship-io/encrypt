@@ -32,7 +32,7 @@ jobs:
     - name: Test
       run: dotnet publish -R ${{ matrix.rid }} -p Release --self-contained ./src/encrypt
     - name: 'Upload Artifact'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: encrypt-cli
         path: |
