@@ -40,7 +40,7 @@ jobs:
           src/encrypt/bin/Release/net9.0/linux-x64/publish/encrypt
   upload:
     name: Create release and upload
-    # if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     steps:
