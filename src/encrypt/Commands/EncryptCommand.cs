@@ -1,7 +1,6 @@
-﻿using encrypt.Encryptors.Symetric;
+﻿using encrypt.Encryptors.E2E;
 using System.CommandLine;
 using System.CommandLine.Parsing;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace encrypt.Commands
@@ -12,22 +11,22 @@ namespace encrypt.Commands
         {
             var command = new Command("enc", "Encrypts input");
 
-            var inputFile = new Argument<string>("input")
+            var inputFile = new Option<string>("--input", "-i")
             {
                 DefaultValueFactory = DefaultToLine,
                 Description = "The output file path. If no value is passed, or if the '-' character is passed, the input will be read from stdin."
             };
 
-            var outputFile = new Argument<string>("output")
+            var outputFile = new Option<string>("--output", "-o")
             {
                 DefaultValueFactory = DefaultToLine,
                 Description = "The output file path. If no value is passed, or if the '-' character is passed, the output will be written to stdout."
             };
-            var password = new Option<string>("-p,--password");
+            var password = new Option<string>("--password", "-p");
             password.Description = "The password to encrypt with. If not provided here, input will be prompted.";
 
-            command.Arguments.Add(inputFile);
-            command.Arguments.Add(outputFile);
+            command.Options.Add(inputFile);
+            command.Options.Add(outputFile);
             command.Options.Add(password);
 
             command.SetAction(async (result, token) =>
@@ -63,7 +62,7 @@ namespace encrypt.Commands
                     return -2;
                 }
 
-                using var inputFileStream = string.Equals(inputFileValue, "-", StringComparison.OrdinalIgnoreCase) 
+                using var inputFileStream = string.Equals(inputFileValue, "-", StringComparison.OrdinalIgnoreCase)
                     ? Console.OpenStandardInput()
                     : File.OpenRead(inputFileValue!);
 
@@ -71,14 +70,24 @@ namespace encrypt.Commands
                     ? Console.OpenStandardOutput()
                     : File.OpenWrite(outputFileValue!);
 
-
-                var enc = new AES256();
-                await enc.Encrypt(Encoding.UTF8.GetBytes(passwordValue), inputFileStream, outputFileStream, token);
+                WriteEncryptorTypeHeader(outputFileStream);
+                await AESHMACEncryptor.Encrypt(Encoding.UTF8.GetBytes(passwordValue!), inputFileStream, outputFileStream, token);
 
                 return 0;
             });
 
             return command;
+        }
+
+        private static void WriteEncryptorTypeHeader(Stream outputFileStream)
+        {
+            unsafe
+            {
+                ushort buffer = (ushort)EncryptorTypes.AES256HMAC256;
+                var span = new Span<byte>(&buffer, sizeof(ushort));
+
+                outputFileStream.Write(span);
+            }
         }
 
         private static string DefaultToLine(ArgumentResult input)

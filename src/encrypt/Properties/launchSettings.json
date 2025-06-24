@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "encrypt": {
+      "commandName": "Project",
+      "commandLineArgs": "dec -p gggg -i C:\\Code\\encrypt\\src\\encrypt\\test.enc"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-﻿using encrypt.Encryptors.Symetric;
+﻿using encrypt.Encryptors.E2E;
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Text;
@@ -11,22 +11,22 @@ namespace encrypt.Commands
         {
             var command = new Command("dec", "Decrypts input");
 
-            var inputFile = new Argument<string>("input")
+            var inputFile = new Option<string>("--input", "-i")
             {
                 DefaultValueFactory = DefaultToLine,
                 Description = "The output file path. If no value is passed, or if the '-' character is passed, the input will be read from stdin."
             };
 
-            var outputFile = new Argument<string>("output")
+            var outputFile = new Option<string>("--output", "-o")
             {
                 DefaultValueFactory = DefaultToLine,
                 Description = "The output file path. If no value is passed, or if the '-' character is passed, the output will be written to stdout."
             };
-            var password = new Option<string>("-p,--password");
-            password.Description = "The password to encrypt with. If not provided here, input will be prompted.";
+            var password = new Option<string>("--password", "-p");
+            password.Description = "The password to decrypt with. If not provided here, input will be prompted.";
 
-            command.Arguments.Add(inputFile);
-            command.Arguments.Add(outputFile);
+            command.Options.Add(inputFile);
+            command.Options.Add(outputFile);
             command.Options.Add(password);
 
             command.SetAction(async (result, token) =>
@@ -58,16 +58,6 @@ namespace encrypt.Commands
                     ? Console.OpenStandardOutput()
                     : File.OpenWrite(outputFileValue!);
 
-                // First read, the type from the input stream.
-                byte[] type = new byte[2];
-                inputFileStream.ReadExactly(type);
-
-                if (type[0] != 'S' || type[1] != '1')
-                {
-                    Console.Error.WriteLine("Invalid encryption header. Expected 'S1'.");
-                    return -1;
-                }
-
                 if (string.IsNullOrEmpty(passwordValue))
                 {
                     if (string.Equals(inputFileValue, "-", StringComparison.OrdinalIgnoreCase))
@@ -80,11 +70,18 @@ namespace encrypt.Commands
                     passwordValue = Console.ReadLine();
                 }
 
-                var enc = new AES256();
+                // Read the encryption type.
+                var encryptorType = ReadEncryptorTypeFromStream(inputFileStream);
+
+                if (encryptorType != EncryptorTypes.AES256HMAC256)
+                {
+                    Console.Error.WriteLine($"Unsupported encryptor type: {encryptorType}");
+                    return -1;
+                }
 
                 try
                 {
-                    await enc.Decrypt(Encoding.UTF8.GetBytes(passwordValue), inputFileStream, outputFileStream, token);
+                    await AESHMACEncryptor.Decrypt(Encoding.UTF8.GetBytes(passwordValue!), inputFileStream, outputFileStream, token);
                 }
                 catch (Exception ex)
                 {
@@ -101,6 +98,18 @@ namespace encrypt.Commands
         private static string DefaultToLine(ArgumentResult input)
         {
             return "-";
+        }
+
+        private static EncryptorTypes ReadEncryptorTypeFromStream(Stream stream)
+        {
+            unsafe
+            {
+                ushort value = 0;
+                var buffer = new Span<byte>(&value, sizeof(ushort));
+                stream.ReadExactly(buffer);
+
+                return (EncryptorTypes)value;
+            }
         }
     }
 }
