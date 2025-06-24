@@ -38,3 +38,42 @@ jobs:
         path: |
           src/encrypt/bin/Release/net9.0/win-x64/publish/encrypt.exe
           src/encrypt/bin/Release/net9.0/win-x64/publish/encrypt
+  upload:
+    name: Create release and upload
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      
+      - name: Downloading artifacts
+        uses: actions/download-artifact@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: encrypt-cli
+          path: encrypt-cli
+      
+      - name: Generate Changelog
+        run: git log $(git describe --tags --abbrev=0 HEAD^)..HEAD > ${{ github.workspace }}-CHANGELOG.txt
+      
+      - name: Upload Artifact
+        id: upload-release-asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          files: encrypt-cli/*
