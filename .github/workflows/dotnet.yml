@@ -36,8 +36,8 @@ jobs:
       with:
         name: encrypt-cli
         path: |
-          src/encrypt/bin/Release/net9.0/win-x64/publish/encrypt.exe
-          src/encrypt/bin/Release/net9.0/win-x64/publish/encrypt
+          src/encrypt/bin/**/encrypt.exe
+          src/encrypt/bin/**/encrypt
   upload:
     name: Create release and upload
     if: startsWith(github.ref, 'refs/tags/v')
