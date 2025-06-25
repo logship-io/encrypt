@@ -34,14 +34,13 @@ jobs:
     - name: Publish
       run: dotnet publish -r ${{ matrix.rid }} --self-contained ./src/encrypt
     - name: Rename Executable
+      shell: pwsh
       run: |
         mkdir -p output
-        for file in $(find \( -name "encrypt" -o -name "encrypt.exe" \) | grep publish); do
-          filename=$(basename -- "$file")
-          extension="${filename##*.}"
-          filename="${filename%.*}"
-          mv $file output/filename-${{ matrix.rid }}.$extension
-        done
+        $file = Get-ChildItem -Recurse -File | ? { $_.Directory.FullName.EndsWith("publish") } | Select -First 1
+        $newPath = output/$($file.BaseName)-${{ matrix.rid }}$($file.Extension)
+        Move-Item -Path $file.FullName -Destination $newPath
+        Write-Output "Moved file to $newPath"
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4
       with:
