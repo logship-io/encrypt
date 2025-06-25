@@ -12,19 +12,13 @@ void Console_CancelKeyPress(object? sender, ConsoleCancelEventArgs e)
 }
 
 var command = new RootCommand("Encryption command line tool.");
-command.Add(EncryptCommand.CreateInstance());
-command.Add(DecryptCommand.CreateInstance());
+command.Subcommands.Add(EncryptCommand.CreateInstance());
+command.Subcommands.Add(DecryptCommand.CreateInstance());
 
-var parseResult = command.Parse(args);
-if (parseResult.Errors.Count > 0)
-{
-    foreach (var parseError in parseResult.Errors)
-    {
-        Console.Error.WriteLine(parseError.Message);
-    }
+var conf = new CommandLineConfiguration(command);
+conf.EnableDefaultExceptionHandler = true;
 
-    return 1;
-}
+var parseResult = conf.Parse(args);
 
 await parseResult.InvokeAsync(ctx.Token);
 

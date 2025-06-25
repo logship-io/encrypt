@@ -9,7 +9,10 @@ namespace encrypt.Commands
     {
         public static Command CreateInstance()
         {
-            var command = new Command("enc", "Encrypts input");
+            var command = new Command("enc", "Encrypts input. Either from a file or from standard input")
+            {
+                Description = "Encrypts input using AES256 with HMAC256 for integrity. The output is a binary file that contains the salt, IV, and encrypted data, followed by the HMAC."
+            };
 
             var inputFile = new Option<string>("--input", "-i")
             {
@@ -45,11 +48,23 @@ namespace encrypt.Commands
                     Console.Error.WriteLine("Invalid argument for output file");
                 }
 
+                var readFromStdin = string.Equals(inputFileValue, "-", StringComparison.OrdinalIgnoreCase);
+                var writeToStdout = string.Equals(outputFileValue, "-", StringComparison.OrdinalIgnoreCase);
+
+                if (false == readFromStdin)
+                {
+                    if (false == File.Exists(inputFileValue!))
+                    {
+                        Console.Error.WriteLine($"Input file '{inputFileValue}' does not exist.");
+                        return -1;
+                    }
+                }
+
                 if (string.IsNullOrEmpty(passwordValue))
                 {
-                    if (string.Equals(inputFileValue, "-", StringComparison.OrdinalIgnoreCase))
+                    if (readFromStdin)
                     {
-                        Console.Error.WriteLine("Cannot read password from stdin when input is stdin. Please specify the source file, or specify the password on the command line.");
+                        Console.Error.WriteLine("Cannot read password from stdin when input is stdin. Please specify the source file, or specify the password on the command line. If you didn't expect this, make sure you're specifying the input from a file.");
                         return -1;
                     }
 
@@ -62,11 +77,11 @@ namespace encrypt.Commands
                     return -2;
                 }
 
-                using var inputFileStream = string.Equals(inputFileValue, "-", StringComparison.OrdinalIgnoreCase)
+                using var inputFileStream = readFromStdin
                     ? Console.OpenStandardInput()
                     : File.OpenRead(inputFileValue!);
 
-                using var outputFileStream = string.Equals(outputFileValue, "-", StringComparison.OrdinalIgnoreCase)
+                using var outputFileStream = writeToStdout
                     ? Console.OpenStandardOutput()
                     : File.OpenWrite(outputFileValue!);
 
