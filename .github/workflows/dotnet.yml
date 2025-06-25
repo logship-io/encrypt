@@ -33,13 +33,21 @@ jobs:
       run: dotnet build --no-restore ./src/encrypt
     - name: Publish
       run: dotnet publish -r ${{ matrix.rid }} --self-contained ./src/encrypt
+    - name: Rename Executable
+      run: |
+        mkdir -p output
+        for file in $(find \( -name "encrypt" -o -name "encrypt.exe" \) | grep publish); do
+          filename=$(basename -- "$file")
+          extension="${filename##*.}"
+          filename="${filename%.*}"
+          mv $file output/filename-${{ matrix.rid }}.$extension
+        done
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4
       with:
         name: encrypt-cli-${{ matrix.rid }}
         path: |
-          src/encrypt/bin/Release/net9.0/win-x64/publish/encrypt.exe
-          src/encrypt/bin/Release/net9.0/linux-x64/publish/encrypt
+          output/*
   upload:
     name: Create release and upload
     if: startsWith(github.ref, 'refs/tags/v')
