@@ -38,7 +38,7 @@ jobs:
       run: |
         mkdir -p output
         $file = Get-ChildItem -Recurse -File | ? { $_.Directory.FullName.EndsWith("publish") } | Select -First 1
-        $newPath = output/$($file.BaseName)-${{ matrix.rid }}$($file.Extension)
+        $newPath = "output/$($file.BaseName)-${{ matrix.rid }}$($file.Extension)"
         Move-Item -Path $file.FullName -Destination $newPath
         Write-Output "Moved file to $newPath"
     - name: 'Upload Artifact'
