@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "encrypt": {
+      "commandName": "Project",
+      "commandLineArgs": "dec C:\\tmp\\test.enc --password test"
+    }
+  }
+}

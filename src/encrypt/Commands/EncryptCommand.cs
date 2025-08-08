@@ -1,7 +1,9 @@
 ﻿using encrypt.Encryptors.E2E;
+using encrypt.Encryptors.Metadata;
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Text;
+using System.Text.Json;
 
 namespace encrypt.Commands
 {
@@ -14,22 +16,21 @@ namespace encrypt.Commands
                 Description = "Encrypts input using AES256 with HMAC256 for integrity. The output is a binary file that contains the salt, IV, and encrypted data, followed by the HMAC."
             };
 
-            var inputFile = new Option<string>("--input", "-i")
+            var inputFile = new Argument<string>("input")
             {
-                DefaultValueFactory = DefaultToLine,
-                Description = "The output file path. If no value is passed, or if the '-' character is passed, the input will be read from stdin."
+                Description = "The output file path. If the '-' character is passed, the input will be read from stdin."
             };
 
-            var outputFile = new Option<string>("--output", "-o")
+            var outputFile = new Argument<string>("output")
             {
-                DefaultValueFactory = DefaultToLine,
-                Description = "The output file path. If no value is passed, or if the '-' character is passed, the output will be written to stdout."
+                Description = "The output file path. If the '-' character is passed, the output will be written to stdout."
             };
+
             var password = new Option<string>("--password", "-p");
             password.Description = "The password to encrypt with. If not provided here, input will be prompted.";
 
-            command.Options.Add(inputFile);
-            command.Options.Add(outputFile);
+            command.Arguments.Add(inputFile);
+            command.Arguments.Add(outputFile);
             command.Options.Add(password);
 
             command.SetAction(async (result, token) =>
@@ -85,8 +86,11 @@ namespace encrypt.Commands
                     ? Console.OpenStandardOutput()
                     : File.OpenWrite(outputFileValue!);
 
-                WriteEncryptorTypeHeader(outputFileStream);
-                await AESHMACEncryptor.Encrypt(Encoding.UTF8.GetBytes(passwordValue!), inputFileStream, outputFileStream, token);
+                WriteEncryptorTypeHeader(EncryptorTypes.AES256HMAC256, outputFileStream);
+                await AESHMACEncryptor.Encrypt(new EncryptedFileHiddenMetadata()
+                {
+                    InputFileName = readFromStdin ? "encrypted-file" : inputFileValue!
+                }, Encoding.UTF8.GetBytes(passwordValue!), inputFileStream, outputFileStream, token);
 
                 return 0;
             });
@@ -94,15 +98,16 @@ namespace encrypt.Commands
             return command;
         }
 
-        private static void WriteEncryptorTypeHeader(Stream outputFileStream)
+        private static void WriteEncryptorTypeHeader(
+            EncryptorTypes encryptorType,
+            Stream outputFileStream)
         {
-            unsafe
+            var values = new EncryptedFilePublicMetadata
             {
-                ushort buffer = (ushort)EncryptorTypes.AES256HMAC256;
-                var span = new Span<byte>(&buffer, sizeof(ushort));
+                EncryptorType = encryptorType
+            };
 
-                outputFileStream.Write(span);
-            }
+            JsonSerializer.Serialize(outputFileStream, values, EncryptSourceGenerationContext.Default.EncryptedFilePublicMetadata);
         }
 
         private static string DefaultToLine(ArgumentResult input)

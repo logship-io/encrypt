@@ -1,11 +1,17 @@
-﻿using encrypt.Utilities;
+﻿using encrypt.Encryptors.Metadata;
+using encrypt.Utilities;
 using System.Security.Cryptography;
 
 namespace encrypt.Encryptors.E2E
 {
     internal static class AESHMACEncryptor
     {
-        public static async Task Encrypt(byte[] password, Stream input, Stream output, CancellationToken token)
+        public static async Task Encrypt(
+            EncryptedFileHiddenMetadata metadata,
+            byte[] password,
+            Stream input,
+            Stream output,
+            CancellationToken token)
         {
             var salt = new byte[64];
             RandomNumberGenerator.Fill(salt);
@@ -25,7 +31,7 @@ namespace encrypt.Encryptors.E2E
 
             using (var hmacStream = new CryptoStream(output, hmac, CryptoStreamMode.Write, true))
             {
-                // Write the IV to the hamc stream
+                // Write the IV to the hmac stream
                 hmacStream.Write(initializationVector);
 
                 using (var aes = Aes.Create())
@@ -39,6 +45,12 @@ namespace encrypt.Encryptors.E2E
                     {
                         using (var cryptorStream = new CryptoStream(hmacStream, encryptor, CryptoStreamMode.Write))
                         {
+
+                            // Write the metadata to the encrypted stream
+                            var metadataJson = System.Text.Json.JsonSerializer.Serialize(metadata);
+                            var metadataBytes = System.Text.Encoding.UTF8.GetBytes(metadataJson);
+                            cryptorStream.Write(metadataBytes, 0, metadataBytes.Length);
+
                             await input.CopyToAsync(cryptorStream, token);
                             await cryptorStream.FlushFinalBlockAsync(token);
                         }
@@ -52,7 +64,7 @@ namespace encrypt.Encryptors.E2E
             output.Write(hmac.Hash!, 0, hmac.Hash!.Length);
         }
 
-        public static async Task Decrypt(byte[] password, Stream input, Stream output, CancellationToken token)
+        public static async Task Decrypt(byte[] password, Stream input, OutputStreamFactory outputFactory, CancellationToken token)
         {
             var salt = new byte[64];
 
@@ -72,6 +84,7 @@ namespace encrypt.Encryptors.E2E
                     // Read the IV from the hmac stream
                     var initializationVector = new byte[16];
                     hmacStream.ReadExactly(initializationVector);
+
                     using (var aes = Aes.Create())
                     {
                         aes.Key = passKey.ToArray();
@@ -82,11 +95,28 @@ namespace encrypt.Encryptors.E2E
                         {
                             using (var cryptorStream = new CryptoStream(hmacStream, decryptor, CryptoStreamMode.Read))
                             {
-                                // Copy the decrypted data to the output stream
-                                await cryptorStream.CopyToAsync(output, token);
+                                // Now read the metadata
+                                if (false == Utf8JsonObjectReader.ReadJsonObjectAsString(cryptorStream, out var metadataString))
+                                {
+                                    throw new CryptographicException("Failed to read metadata from the encrypted file.");
+                                }
+
+                                var metadata = System.Text.Json.JsonSerializer.Deserialize<EncryptedFileHiddenMetadata>(metadataString);
+                                if (metadata is null)
+                                {
+                                    throw new CryptographicException("Failed to deserialize metadata from the encrypted file.");
+                                }
+
+                                using (var output = outputFactory.CreateFileStream(metadata.InputFileName))
+                                {
+
+
+                                    // Copy the decrypted data to the output stream
+                                    await cryptorStream.CopyToAsync(output, token);
+                                }
                             }
+                            aes.Clear();
                         }
-                        aes.Clear();
                     }
                 }
 

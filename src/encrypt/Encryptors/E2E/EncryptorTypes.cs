@@ -1,5 +1,9 @@
-﻿namespace encrypt.Encryptors.E2E
+﻿using System.Text.Json.Serialization;
+
+namespace encrypt.Encryptors.E2E
 {
+    [JsonConverter(typeof(JsonStringEnumConverter<EncryptorTypes>))]
+
     internal enum EncryptorTypes : ushort
     {
         Unknown = 0,

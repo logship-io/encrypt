@@ -1,12 +1,17 @@
 ﻿using encrypt.Encryptors.E2E;
+using encrypt.Encryptors.Metadata;
+using encrypt.Utilities;
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Text;
+using System.Text.Json;
 
 namespace encrypt.Commands
 {
     internal static class DecryptCommand
     {
+        private const string DEFAULTINPUT = "<inputpath>";
+
         public static Command CreateInstance()
         {
             var command = new Command("dec", "Decrypts input, either from a file or from stdin.")
@@ -14,22 +19,21 @@ namespace encrypt.Commands
                 Description = "Decrypts input using AES256 with HMAC256 for integrity. The input is a binary file that contains the salt, IV, encrypted data, and the HMAC."
             };
 
-            var inputFile = new Option<string>("--input", "-i")
+            var inputFile = new Argument<string>("input")
             {
-                DefaultValueFactory = DefaultToLine,
-                Description = "The output file path. If no value is passed, or if the '-' character is passed, the input will be read from stdin."
+                Description = "The output file path. If the '-' character is passed, the input will be read from stdin."
             };
 
-            var outputFile = new Option<string>("--output", "-o")
+            var outputFile = new Argument<string>("output")
             {
-                DefaultValueFactory = DefaultToLine,
-                Description = "The output file path. If no value is passed, or if the '-' character is passed, the output will be written to stdout."
+                DefaultValueFactory = DefaultToEmpty,
+                Description = "The output file path. Not required. If not supplied, will default to the original filename. If the '-' character is passed, the output will be written to stdout. "
             };
             var password = new Option<string>("--password", "-p");
             password.Description = "The password to decrypt with. If not provided here, input will be prompted.";
 
-            command.Options.Add(inputFile);
-            command.Options.Add(outputFile);
+            command.Arguments.Add(inputFile);
+            command.Arguments.Add(outputFile);
             command.Options.Add(password);
 
             command.SetAction(async (result, token) =>
@@ -69,10 +73,6 @@ namespace encrypt.Commands
                     ? Console.OpenStandardInput()
                     : File.OpenRead(inputFileValue!);
 
-                using var outputFileStream = writeToStdout
-                    ? Console.OpenStandardOutput()
-                    : File.OpenWrite(outputFileValue!);
-
                 if (string.IsNullOrEmpty(passwordValue))
                 {
                     if (readFromStdin)
@@ -86,21 +86,22 @@ namespace encrypt.Commands
                 }
 
                 // Read the encryption type.
-                var encryptorType = ReadEncryptorTypeFromStream(inputFileStream);
+                var metadata = ReadEncryptorTypeFromStream(inputFileStream);
 
-                if (encryptorType != EncryptorTypes.AES256HMAC256)
+                if (metadata.EncryptorType != EncryptorTypes.AES256HMAC256)
                 {
-                    Console.Error.WriteLine($"Unsupported encryptor type: {encryptorType}");
+                    Console.Error.WriteLine($"Unsupported encryptor type: {metadata.EncryptorType}");
                     return -1;
                 }
 
                 try
                 {
-                    await AESHMACEncryptor.Decrypt(Encoding.UTF8.GetBytes(passwordValue!), inputFileStream, outputFileStream, token);
+                    var outputStreamBuildre = CreateOutputStreamFactory(outputFileValue);
+                    await AESHMACEncryptor.Decrypt(Encoding.UTF8.GetBytes(passwordValue!), inputFileStream, outputStreamBuildre, token);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Invalid password or the file is corrupt.");
+                    Console.Error.WriteLine(ex);
                     return -1;
                 }
 
@@ -110,21 +111,45 @@ namespace encrypt.Commands
             return command;
         }
 
-        private static string DefaultToLine(ArgumentResult input)
+        private static string DefaultToEmpty(ArgumentResult input)
         {
-            return "-";
+            return DEFAULTINPUT;
         }
 
-        private static EncryptorTypes ReadEncryptorTypeFromStream(Stream stream)
+        private static OutputStreamFactory CreateOutputStreamFactory(string filepath)
         {
-            unsafe
+            if (string.IsNullOrWhiteSpace(filepath) || filepath.Equals("-", StringComparison.OrdinalIgnoreCase))
             {
-                ushort value = 0;
-                var buffer = new Span<byte>(&value, sizeof(ushort));
-                stream.ReadExactly(buffer);
-
-                return (EncryptorTypes)value;
+                return new OutputStreamFactory(Console.OpenStandardOutput());
             }
+
+            if (string.Equals(filepath, DEFAULTINPUT, StringComparison.OrdinalIgnoreCase))
+            {
+                return new OutputStreamFactory(null);
+            }
+
+            if (File.Exists(filepath))
+            {
+                File.Delete(filepath);
+                // throw new Exception($"File already exists at path: {filepath}. Please choose a different path.");
+            }
+
+            return new OutputStreamFactory(new FileStream(filepath, FileMode.Create, FileAccess.Write, FileShare.None));
+        }
+
+        private static EncryptedFilePublicMetadata ReadEncryptorTypeFromStream(Stream stream)
+        {
+            if (false == Utf8JsonObjectReader.ReadJsonObjectAsString(stream, out var jsonValue))
+            {
+                throw new InvalidOperationException("Make sure the input file was generated with this program. Failed to read file public metadata, which mean's it cannot be decrypted.");
+            }
+
+            var value = JsonSerializer.Deserialize(jsonValue.ToString(), EncryptSourceGenerationContext.Default.EncryptedFilePublicMetadata);
+            if (value == null)
+            {
+                throw new InvalidOperationException("Make sure the input file was generated with this program and not altered. Failed to deserialize the file public metadata.");
+            }
+            return value;
         }
     }
 }
